@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0b;
+  --fg: #fafafa;
+  --accent: #22d3ee;
+  --muted: #71717a;
+  --border: #27272a;
+}
+
+html {
+  background-color: #0a0a0b;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+
+/* Animated gradient border - use p-[1px] on wrapper, inner has card bg */
+@keyframes gradient-border {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.card-gradient-border {
+  background: linear-gradient(
+    90deg,
+    rgba(34, 211, 238, 0.35),
+    rgba(167, 139, 250, 0.25),
+    rgba(34, 211, 238, 0.35)
+  );
+  background-size: 200% 100%;
+  animation: gradient-border 8s ease-in-out infinite;
+}
+
+/* Card lift + border brighten on hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Light noise overlay */
+.noise-overlay {
+  position: relative;
+}
+
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+
+.noise-overlay > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Landing hero animations */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 211, 238, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(34, 211, 238, 0.5); }
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+
+.animate-float-subtle {
+  animation: float-subtle 4s ease-in-out infinite;
+}
+
+/* Analyzing cinematic */
+@keyframes shimmer-text {
+  0% { background-position: -200% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes title-glow-pulse {
+  0%, 100% { text-shadow: 0 0 20px rgba(34, 211, 238, 0.15); }
+  50% { text-shadow: 0 0 32px rgba(34, 211, 238, 0.25); }
+}
+
+@keyframes scan-line {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.4; box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3); }
+  50% { opacity: 1; box-shadow: 0 0 12px rgba(34, 211, 238, 0.6); }
+}
+
+.analyzing-title-shimmer {
+  background: linear-gradient(
+    90deg,
+    #fff 0%,
+    #22d3ee 25%,
+    #fff 50%,
+    #22d3ee 75%,
+    #fff 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+.analyzing-title-glow {
+  animation: title-glow-pulse 3s ease-in-out infinite;
+}
+
+.analyzing-scan-line {
+  top: 0;
+  animation: scan-line 2.5s ease-in-out infinite;
+}
+
+.analyzing-node-pulse {
+  animation: node-pulse 1.4s ease-in-out infinite;
+}
+
+/* Select loading cinematic */
+.select-title-shimmer {
+  background: linear-gradient(
+    90deg,
+    #fff 0%,
+    #22d3ee 25%,
+    #fff 50%,
+    #22d3ee 75%,
+    #fff 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+.select-title-glow {
+  animation: title-glow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes select-box-pulse {
+  0%, 100% { opacity: 0.8; box-shadow: 0 0 8px rgba(34, 211, 238, 0.4); }
+  50% { opacity: 1; box-shadow: 0 0 16px rgba(34, 211, 238, 0.6); }
+}
+
+.select-box-pulse {
+  animation: select-box-pulse 1.3s ease-in-out infinite;
+}
+
+.select-noise-overlay {
+  position: relative;
+}
+
+.select-noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+
+.select-noise-overlay > * {
+  position: relative;
+  z-index: 1;
+}
