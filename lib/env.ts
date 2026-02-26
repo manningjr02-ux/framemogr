@@ -24,4 +24,15 @@ function validateEnv(): Record<keyof typeof required, string> {
   return required as Record<keyof typeof required, string>;
 }
 
-export const env = validateEnv();
+let _validated: Record<keyof typeof required, string> | null = null;
+function getEnv(): Record<keyof typeof required, string> {
+  if (!_validated) _validated = validateEnv();
+  return _validated;
+}
+
+/** Lazy: validation runs on first property access so build can complete without env vars. */
+export const env = new Proxy({} as Record<keyof typeof required, string>, {
+  get(_, key) {
+    return getEnv()[key as keyof typeof required];
+  },
+});

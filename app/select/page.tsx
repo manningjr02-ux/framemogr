@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
@@ -8,7 +8,7 @@ import SelectLoadingCinematic from "@/components/SelectLoadingCinematic";
 
 type PersonThumb = { label: string; signedUrl: string | null };
 
-export default function SelectPage() {
+function SelectPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysisId") ?? "";
@@ -299,5 +299,22 @@ export default function SelectPage() {
         </button>
       </Container>
     </main>
+  );
+}
+
+export default function SelectPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center justify-center overflow-hidden">
+          <div className="noise-overlay pointer-events-none absolute inset-0" />
+          <Container className="relative z-10 flex flex-col items-center">
+            <SelectLoadingCinematic showFinalText={false} />
+          </Container>
+        </main>
+      }
+    >
+      <SelectPageContent />
+    </Suspense>
   );
 }

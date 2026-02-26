@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
@@ -10,7 +10,7 @@ const MIN_SUSPENSE_MS = 6000;
 const VERDICT_HOLD_MS = 380;
 const POLL_INTERVAL_MS = 1500;
 
-export default function AnalyzingPage() {
+function AnalyzingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysisId");
@@ -129,5 +129,22 @@ export default function AnalyzingPage() {
         <AnalyzingCinematic showVerdictReady={showVerdictReady} />
       </Container>
     </main>
+  );
+}
+
+export default function AnalyzingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center justify-center overflow-hidden">
+          <div className="noise-overlay pointer-events-none absolute inset-0" />
+          <Container className="relative z-10 flex flex-col items-center">
+            <AnalyzingCinematic showVerdictReady={false} />
+          </Container>
+        </main>
+      }
+    >
+      <AnalyzingPageContent />
+    </Suspense>
   );
 }

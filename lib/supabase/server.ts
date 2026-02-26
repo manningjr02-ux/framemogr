@@ -13,5 +13,15 @@ export function supabaseService(): SupabaseClient {
   );
 }
 
-/** Pre-created service-role client for convenience (uses supabaseService internally). */
-export const supabaseAdmin = supabaseService();
+let _admin: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_admin) _admin = supabaseService();
+  return _admin;
+}
+
+/** Lazy: created on first use so build can complete without env vars. */
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    return (getSupabaseAdmin() as unknown as Record<string, unknown>)[prop as string];
+  },
+});
