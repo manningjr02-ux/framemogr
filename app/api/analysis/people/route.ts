@@ -4,8 +4,6 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const URL_EXPIRY = 60 * 10; // 10 minutes
-
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -36,29 +34,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ people: [] });
     }
 
-    const withUrls = await Promise.all(
-      people.map(async (p) => {
-        const path = p.face_crop_path;
-        let signedUrl: string | null = null;
-        if (path) {
-          try {
-            const { data, error: sErr } = await supabaseAdmin.storage
-              .from("person-crops")
-              .createSignedUrl(path, URL_EXPIRY);
-            if (sErr)
-              console.error("[people] signedUrl error:", sErr.message, "path=", path);
-            signedUrl = data?.signedUrl ?? null;
-          } catch (e) {
-            console.error("[people] signedUrl exception:", e);
-          }
-        }
-        return {
-          label: p.label,
-          signedUrl,
-          face_crop_path: path ?? null,
-        };
-      })
-    );
+    // Use same-origin proxy URLs so thumbnails load on all deployments (avoids CORS with Supabase storage).
+    const withUrls = people.map((p) => {
+      const path = p.face_crop_path;
+      const signedUrl =
+        path != null && path !== ""
+          ? `/api/analysis/people/thumbnail?analysisId=${encodeURIComponent(analysisId)}&label=${encodeURIComponent(p.label)}`
+          : null;
+      return {
+        label: p.label,
+        signedUrl,
+        face_crop_path: path ?? null,
+      };
+    });
 
     return NextResponse.json({ people: withUrls });
   } catch (e) {
