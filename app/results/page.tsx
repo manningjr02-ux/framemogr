@@ -203,7 +203,7 @@ export default async function ResultsPage({ searchParams }: PageProps) {
           <MogCardTrigger
             currentScore={normalized.overall_score}
             potentialScore={normalized.potential_score}
-            currentRank={yourRank}
+            currentRank={yourRank ?? 1}
             totalPeople={totalPeople}
             lowestMetric={lowestMetric}
           />
