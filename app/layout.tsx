@@ -3,7 +3,10 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
-  title: "framrmog — Who Controls The Frame?",
+  title: {
+    default: "framrmog — Who Controls The Frame?",
+    template: "%s | FrameMog",
+  },
   description: "See who's farming the most frame points in any group photo.",
 };
 
