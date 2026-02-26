@@ -34,12 +34,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ people: [] });
     }
 
-    // Use same-origin proxy URLs so thumbnails load on all deployments (avoids CORS with Supabase storage).
-    const withUrls = people.map((p) => {
+    // Absolute same-origin proxy URLs so thumbnails load on all deployments (avoids CORS and relative-URL issues).
+    const origin =
+      req.headers.get("x-forwarded-proto") && req.headers.get("x-forwarded-host")
+        ? `${req.headers.get("x-forwarded-proto")}://${req.headers.get("x-forwarded-host")}`
+        : new URL(req.url).origin;
+
+    const withUrls = people.map((p, index) => {
       const path = p.face_crop_path;
       const signedUrl =
         path != null && path !== ""
-          ? `/api/analysis/people/thumbnail?analysisId=${encodeURIComponent(analysisId)}&label=${encodeURIComponent(p.label)}`
+          ? `${origin}/api/analysis/people/thumbnail?analysisId=${encodeURIComponent(analysisId)}&index=${index}`
           : null;
       return {
         label: p.label,

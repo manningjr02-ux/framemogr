@@ -9,32 +9,41 @@ const SIGNED_URL_EXPIRY = 60; // 1 minute (only used server-side to fetch)
 /**
  * Proxies face crop image from Supabase storage so the browser gets same-origin
  * URLs and avoids CORS issues (e.g. on Vercel).
- * GET /api/analysis/people/thumbnail?analysisId=...&label=...
+ * GET /api/analysis/people/thumbnail?analysisId=...&index=0
  */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const analysisId = searchParams.get("analysisId");
-    const label = searchParams.get("label");
+    const indexStr = searchParams.get("index");
 
-    if (!analysisId || label == null || label === "") {
-      return new NextResponse("Missing analysisId or label", { status: 400 });
+    if (!analysisId || indexStr == null || indexStr === "") {
+      return new NextResponse("Missing analysisId or index", { status: 400 });
+    }
+    const index = parseInt(indexStr, 10);
+    if (Number.isNaN(index) || index < 0) {
+      return new NextResponse("Invalid index", { status: 400 });
     }
 
-    const { data: row, error } = await supabaseAdmin
+    const { data: people, error } = await supabaseAdmin
       .from("analysis_people")
       .select("face_crop_path")
       .eq("analysis_id", analysisId)
-      .eq("label", label)
-      .maybeSingle();
+      .order("left_to_right_index", { ascending: true });
 
-    if (error || !row?.face_crop_path) {
+    if (error || !people?.length || index >= people.length) {
       return new NextResponse("Not found", { status: 404 });
     }
 
+    const row = people[index];
+    if (!row?.face_crop_path) {
+      return new NextResponse("Not found", { status: 404 });
+    }
+
+    const path = row.face_crop_path;
     const { data: signed, error: signErr } = await supabaseAdmin.storage
       .from("person-crops")
-      .createSignedUrl(row.face_crop_path, SIGNED_URL_EXPIRY);
+      .createSignedUrl(path, SIGNED_URL_EXPIRY);
 
     if (signErr || !signed?.signedUrl) {
       console.error("[thumbnail] signedUrl error:", signErr?.message);
