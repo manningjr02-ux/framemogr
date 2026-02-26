@@ -90,7 +90,10 @@ function SelectPageContent() {
         const list = await fetchPeople();
         const hasThumbs = list.length > 0 && list.some((p: PersonThumb) => p.signedUrl);
 
-        if (!hasThumbs) {
+        // Show grid as soon as we have people (thumbnails may load or show "No image").
+        if (list.length > 0 && !cancelled) setPeople(list);
+
+        if (!hasThumbs && list.length > 0) {
           if (didDetectRef.current !== analysisId) {
             didDetectRef.current = analysisId;
             setDetecting(true);
@@ -102,8 +105,10 @@ function SelectPageContent() {
           return;
         }
 
-        const listAfter = await fetchPeople();
-        if (!cancelled) setPeople(listAfter);
+        if (hasThumbs) {
+          const listAfter = await fetchPeople();
+          if (!cancelled) setPeople(listAfter);
+        }
       } catch (e: unknown) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : String(e));

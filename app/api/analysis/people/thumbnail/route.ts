@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseService } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +25,8 @@ export async function GET(req: Request) {
       return new NextResponse("Invalid index", { status: 400 });
     }
 
-    const { data: people, error } = await supabaseAdmin
+    const supabase = supabaseService();
+    const { data: people, error } = await supabase
       .from("analysis_people")
       .select("face_crop_path")
       .eq("analysis_id", analysisId)
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
     }
 
     const path = row.face_crop_path;
-    const { data: signed, error: signErr } = await supabaseAdmin.storage
+    const { data: signed, error: signErr } = await supabase.storage
       .from("person-crops")
       .createSignedUrl(path, SIGNED_URL_EXPIRY);
 

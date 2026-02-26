@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseService } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: people, error } = await supabaseAdmin
+    const supabase = supabaseService();
+    const { data: people, error } = await supabase
       .from("analysis_people")
       .select("label, face_crop_path")
       .eq("analysis_id", analysisId)
