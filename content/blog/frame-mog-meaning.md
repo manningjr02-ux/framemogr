@@ -1,6 +1,6 @@
 ---
-title: Frame Mog Meaning: What "Frame Mogged" Really Means (TikTok Explained)
-description: What does frame mog mean? Learn the full meaning of frame mogged, its TikTok origin, and why people say you got frame mogged in photos.
+title: "Frame Mog Meaning: What \"Frame Mogged\" Really Means (TikTok Explained)"
+description: "What does frame mog mean? Learn the full meaning of frame mogged, its TikTok origin, and why people say you got frame mogged in photos."
 datePublished: 2026-02-26
 dateModified: 2026-02-26
 category: meaning
