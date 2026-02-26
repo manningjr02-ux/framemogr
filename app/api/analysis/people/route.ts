@@ -4,6 +4,10 @@ import { supabaseService } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Returns detected people for an analysis (labels only).
+ * Original image and detected_people are used; no image URLs returned.
+ */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -19,7 +23,7 @@ export async function GET(req: Request) {
     const supabase = supabaseService();
     const { data: people, error } = await supabase
       .from("analysis_people")
-      .select("label, face_crop_path")
+      .select("label")
       .eq("analysis_id", analysisId)
       .order("left_to_right_index", { ascending: true });
 
@@ -35,26 +39,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ people: [] });
     }
 
-    // Absolute same-origin proxy URLs so thumbnails load on all deployments (avoids CORS and relative-URL issues).
-    const origin =
-      req.headers.get("x-forwarded-proto") && req.headers.get("x-forwarded-host")
-        ? `${req.headers.get("x-forwarded-proto")}://${req.headers.get("x-forwarded-host")}`
-        : new URL(req.url).origin;
+    const list = people.map((p) => ({
+      label: p?.label ?? null,
+    }));
 
-    const withUrls = people.map((p, index) => {
-      const path = p.face_crop_path;
-      const signedUrl =
-        path != null && path !== ""
-          ? `${origin}/api/analysis/people/thumbnail?analysisId=${encodeURIComponent(analysisId)}&index=${index}`
-          : null;
-      return {
-        label: p.label,
-        signedUrl,
-        face_crop_path: path ?? null,
-      };
-    });
-
-    return NextResponse.json({ people: withUrls });
+    return NextResponse.json({ people: list });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     console.error("[people] error:", e);

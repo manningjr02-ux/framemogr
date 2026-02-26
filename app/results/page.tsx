@@ -8,7 +8,7 @@ import ResultsBreakdownGrid from "@/components/ResultsBreakdownGrid";
 import ResultsTopMove from "@/components/ResultsTopMove";
 import ResultsInsights from "@/components/ResultsInsights";
 import FrameOverlayExport from "@/components/FrameOverlayExport";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, getGroupUploadImageUrl } from "@/lib/supabase/server";
 import { normalizeFrameMogResult } from "@/src/lib/normalizeFrameMogResult";
 import { getMetricLabel } from "@/src/lib/frameMogLabels";
 import {
@@ -75,7 +75,20 @@ export default async function ResultsPage({ searchParams }: PageProps) {
     .order("sort_order", { ascending: true });
 
   const selectedLabel = analysis.selected_label ?? "";
-  const peopleList = people ?? [];
+  const detectedPeople = (analysis.detected_people ?? []) as Array<{
+    id?: string;
+    label: string;
+    box: { x: number; y: number; w: number; h: number };
+  }>;
+  const peopleFromDb = people ?? [];
+  const peopleList =
+    peopleFromDb.length > 0
+      ? peopleFromDb
+      : detectedPeople.map((p, i) => ({
+          label: p.label,
+          crop_box: p.box,
+          sort_order: i,
+        }));
   const N = peopleList.length;
 
   const dominanceRaw = analysis.dominance_result_v2 as unknown;
@@ -138,10 +151,7 @@ export default async function ResultsPage({ searchParams }: PageProps) {
     scoring = true;
   }
 
-  const { data: signedUrlData } = await supabaseAdmin.storage
-    .from("group-uploads")
-    .createSignedUrl(analysis.image_path, 60 * 60);
-  const imageUrl = signedUrlData?.signedUrl ?? "";
+  const imageUrl = await getGroupUploadImageUrl(analysis.image_path);
   const imageWidth = analysis.image_width ?? 1080;
   const imageHeight = analysis.image_height ?? 1920;
 

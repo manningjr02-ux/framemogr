@@ -1,12 +1,18 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, getGroupUploadImageUrl } from "@/lib/supabase/server";
 import { openai } from "@/lib/openai/client";
 import { DETECT_SYSTEM, DETECT_USER } from "@/lib/analysis/detectPrompt";
 import { dedupeFaces } from "@/lib/analysis/dedupeFaces";
-import { cropFaceToThumbnail } from "@/lib/analysis/imageCrop";
-import { getPersonLabel, labelToPath } from "@/lib/analysis/labels";
+import { sortByPositionAndAssignLabels } from "@/lib/analysis/detectedPeopleSort";
+import {
+  detectResponseSchema,
+  formatDetectValidationError,
+} from "@/lib/detectResponseSchema";
+import { getPersonLabel } from "@/lib/analysis/labels";
 import { runDominanceRanking } from "@/src/lib/runDominanceRanking";
 import { generateFallbackDominance } from "@/src/lib/dominanceSchema";
+import type { DetectedPerson } from "@/lib/types/database";
 
 export const runtime = "nodejs";
 
@@ -15,11 +21,34 @@ type FaceResult = {
   box: { x: number; y: number; w: number; h: number };
 };
 
+/** Clamp box values to [0, 1] for normalized output. */
+function clampBox(b: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } {
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  return {
+    x: clamp(b.x),
+    y: clamp(b.y),
+    w: clamp(b.w),
+    h: clamp(b.h),
+  };
+}
+
 function err(message: string, detail?: string) {
   return NextResponse.json(
     { error: message, ...(detail && { detail }) },
     { status: 500 }
   );
+}
+
+/** Validate detect response payload; returns 422 with structured error if invalid. */
+function validateAndMaybeError(payload: {
+  imageUrl: string;
+  people: DetectedPerson[];
+}): NextResponse | null {
+  const result = detectResponseSchema.safeParse(payload);
+  if (result.success) return null;
+  return NextResponse.json(formatDetectValidationError(result), {
+    status: 422,
+  });
 }
 
 export async function POST(req: Request) {
@@ -35,7 +64,7 @@ export async function POST(req: Request) {
 
     const { data: analysis, error: fetchErr } = await supabaseAdmin
       .from("analyses")
-      .select("id, image_path, status")
+      .select("id, image_path, status, detected_people")
       .eq("id", analysisId)
       .single();
 
@@ -45,31 +74,80 @@ export async function POST(req: Request) {
       return err("Analysis not found", msg);
     }
 
-    const { data: existingPeople, error: existingErr } = await supabaseAdmin
+    // If we have stored detected_people, detection already ran — return existing rows (no reshuffling).
+    const stored = analysis?.detected_people;
+    const hasStoredDetection =
+      Array.isArray(stored) && stored.length > 0;
+
+    const imagePath = (analysis?.image_path || "").replace(/^\//, "");
+
+    if (hasStoredDetection) {
+      console.log("[detect] detected_people exists, returning stored result:", stored.length);
+      await supabaseAdmin
+        .from("analyses")
+        .update({ status: "selecting" })
+        .eq("id", analysisId);
+      const people: DetectedPerson[] = stored.map((p) => {
+        const raw = p?.box ?? { x: 0, y: 0, w: 0.2, h: 0.25 };
+        const box = clampBox({
+          x: typeof raw.x === "number" ? raw.x : 0,
+          y: typeof raw.y === "number" ? raw.y : 0,
+          w: typeof raw.w === "number" ? raw.w : 0.2,
+          h: typeof raw.h === "number" ? raw.h : 0.25,
+        });
+        return {
+          id: p?.id ?? randomUUID(),
+          label: p?.label ?? "",
+          box,
+          ...(typeof p?.confidence === "number" && { confidence: p.confidence }),
+        };
+      });
+      const imageUrl = await getGroupUploadImageUrl(analysis.image_path);
+      const validationErr = validateAndMaybeError({ imageUrl, people });
+      if (validationErr) return validationErr;
+      return NextResponse.json({ imageUrl, people }, { status: 200 });
+    }
+
+    const { data: existingRows, error: existingErr } = await supabaseAdmin
       .from("analysis_people")
-      .select("label, face_crop_path, left_to_right_index, crop_box")
+      .select("id, label, crop_box")
       .eq("analysis_id", analysisId)
       .order("left_to_right_index", { ascending: true });
 
     if (existingErr) {
       console.error("[detect] existing fetch error:", existingErr.message);
-    } else if (existingPeople && existingPeople.length > 0) {
-      console.log("[detect] already detected, returning existing rows:", existingPeople.length);
+    } else if (existingRows && existingRows.length > 0) {
+      console.log("[detect] already detected, returning existing rows:", existingRows.length);
       await supabaseAdmin
         .from("analyses")
         .update({ status: "selecting" })
         .eq("id", analysisId);
-      return NextResponse.json({ people: existingPeople }, { status: 200 });
+      const people: DetectedPerson[] = existingRows.map((r) => {
+        const raw = (r?.crop_box as { x?: number; y?: number; w?: number; h?: number }) ?? {};
+        const box = clampBox({
+          x: typeof raw.x === "number" ? raw.x : 0,
+          y: typeof raw.y === "number" ? raw.y : 0,
+          w: typeof raw.w === "number" ? raw.w : 0.2,
+          h: typeof raw.h === "number" ? raw.h : 0.25,
+        });
+        return {
+          id: r?.id ?? randomUUID(),
+          label: r?.label ?? "",
+          box,
+        };
+      });
+      const imageUrl = await getGroupUploadImageUrl(analysis.image_path);
+      const validationErr = validateAndMaybeError({ imageUrl, people });
+      if (validationErr) return validationErr;
+      return NextResponse.json({ imageUrl, people }, { status: 200 });
     }
 
-    // No people exist. If status is "detecting", a previous run may have crashed or create
-    // wrongly set it. Proceed with detection instead of 409, so thumbnails eventually appear.
+    // No people exist. Run detection.
     await supabaseAdmin
       .from("analyses")
       .update({ status: "detecting" })
       .eq("id", analysisId);
 
-    const imagePath = (analysis.image_path || "").replace(/^\//, "");
     console.log("[detect] downloading image path=%s", imagePath);
 
     const { data: downloadData, error: downloadErr } = await supabaseAdmin
@@ -145,93 +223,38 @@ export async function POST(req: Request) {
     if (faces.length === 0) {
       await supabaseAdmin
         .from("analyses")
-        .update({ status: "failed", error_message: "No faces detected" })
+        .update({ status: "selecting", detected_people: [] })
         .eq("id", analysisId);
-      return NextResponse.json({ error: "No faces detected" }, { status: 400 });
+      const imageUrl = await getGroupUploadImageUrl(analysis.image_path);
+      const validationErr = validateAndMaybeError({ imageUrl, people: [] });
+      if (validationErr) return validationErr;
+      return NextResponse.json({ imageUrl, people: [] }, { status: 200 });
     }
 
-    console.log("[detect] faces returned=%d labels=%s", faces.length, faces.map((_, i) => getPersonLabel(i)).join(", "));
-
-    await supabaseAdmin
-      .from("analysis_people")
-      .delete()
-      .eq("analysis_id", analysisId);
-
-    const results: { label: string; face_crop_path: string }[] = [];
-
-    for (let i = 0; i < faces.length; i++) {
-      const face = faces[i];
-      const label = getPersonLabel(i);
-      const pathLabel = labelToPath(label);
-      const cropPath = `phase1/${analysisId}/${pathLabel}.jpg`.replace(/^\//, "");
-      const box = face.box ?? { x: 0, y: 0, w: 0.2, h: 0.25 };
-
-      console.log("[detect] label=%s box=%o", label, box);
-      console.log("[detect] crop upload path=%s", cropPath);
-
-      try {
-        const cropBuffer = await cropFaceToThumbnail(imageBuffer, box);
-
-        const { error: uploadErr } = await supabaseAdmin.storage
-          .from("person-crops")
-          .upload(cropPath, cropBuffer, {
-            contentType: "image/jpeg",
-            upsert: true,
-          });
-
-        if (uploadErr) {
-          console.error("[detect] crop upload error:", uploadErr.message);
-          await supabaseAdmin
-            .from("analyses")
-            .update({ status: "failed", error_message: `Upload crop failed: ${uploadErr.message}` })
-            .eq("id", analysisId);
-          return err("Failed to upload face crop", uploadErr.message);
-        }
-
-        const { error: insertErr } = await supabaseAdmin
-          .from("analysis_people")
-          .insert({
-            analysis_id: analysisId,
-            label,
-            left_to_right_index: face.left_to_right_index ?? i,
-            crop_box: box,
-            face_crop_path: cropPath,
-          });
-
-        if (insertErr) {
-          console.error("[detect] insert people error:", insertErr.message);
-          await supabaseAdmin
-            .from("analyses")
-            .update({ status: "failed", error_message: `Insert failed: ${insertErr.message}` })
-            .eq("id", analysisId);
-          return err("Failed to save person", insertErr.message);
-        }
-
-        results.push({ label, face_crop_path: cropPath });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Unknown";
-        console.error("[detect] face loop error:", msg);
-        await supabaseAdmin
-          .from("analyses")
-          .update({ status: "failed", error_message: msg })
-          .eq("id", analysisId);
-        return err("Face processing failed", msg);
-      }
-    }
+    const withBoxes = faces.map((face) => {
+      const rawBox = face?.box ?? { x: 0, y: 0, w: 0.2, h: 0.25 };
+      const box = clampBox(rawBox);
+      return { id: randomUUID(), box };
+    });
+    const detectedPeopleToStore = sortByPositionAndAssignLabels(withBoxes);
+    console.log("[detect] faces returned=%d labels=%s", faces.length, detectedPeopleToStore.map((p) => p.label).join(", "));
 
     let dominanceUpdate: { dominance_result_v2?: unknown; dominance_version?: string } = {};
-    if (results.length >= 2) {
+    if (detectedPeopleToStore.length >= 2) {
       try {
-        const imageUrl = `data:${mime};base64,${base64}`;
-        const labels = results.map((r) => r.label);
-        const dominanceResult = await runDominanceRanking({ imageUrl, labels });
+        const imageUrlData = `data:${mime};base64,${base64}`;
+        const labels = detectedPeopleToStore.map((p) => p.label);
+        const dominanceResult = await runDominanceRanking({ imageUrl: imageUrlData, labels });
         dominanceUpdate = {
           dominance_result_v2: dominanceResult,
           dominance_version: "v2",
         };
       } catch (e) {
         console.error("[detect] dominance ranking error:", e);
-        const fallback = generateFallbackDominance(analysisId, results.map((r) => r.label));
+        const fallback = generateFallbackDominance(
+          analysisId,
+          detectedPeopleToStore.map((p) => p.label)
+        );
         dominanceUpdate = {
           dominance_result_v2: fallback,
           dominance_version: "fallback",
@@ -241,10 +264,20 @@ export async function POST(req: Request) {
 
     await supabaseAdmin
       .from("analyses")
-      .update({ status: "selecting", ...dominanceUpdate })
+      .update({
+        status: "selecting",
+        detected_people: detectedPeopleToStore,
+        ...dominanceUpdate,
+      })
       .eq("id", analysisId);
 
-    return NextResponse.json({ people: results });
+    const imageUrl = await getGroupUploadImageUrl(analysis.image_path);
+    const validationErr = validateAndMaybeError({
+      imageUrl,
+      people: detectedPeopleToStore,
+    });
+    if (validationErr) return validationErr;
+    return NextResponse.json({ imageUrl, people: detectedPeopleToStore });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[detect] error", e);

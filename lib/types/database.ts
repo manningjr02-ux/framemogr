@@ -3,6 +3,14 @@
  * Updated for v2 migration: analysis_version, result_v2
  */
 
+/** One stored detected person (persistent per analysis). */
+export type DetectedPerson = {
+  id: string;
+  label: string;
+  box: { x: number; y: number; w: number; h: number };
+  confidence?: number;
+};
+
 /** Analysis row from `analyses` table */
 export type AnalysisRow = {
   id: string;
@@ -13,6 +21,8 @@ export type AnalysisRow = {
   status: string;
   consent_confirmed: boolean;
   selected_label: string | null;
+  /** Id of selected person in detected_people (overlay flow). */
+  selected_person_id: string | null;
   current_score: number | null;
   potential_score: number | null;
   potential_delta: number | null;
@@ -26,6 +36,8 @@ export type AnalysisRow = {
   dominance_result_v2: DominanceResultV2 | null;
   /** Dominance ranking version: v1 (from run) or v2 (from runDominanceRanking) */
   dominance_version: "v1" | "v2";
+  /** Stored detection result; when set, detection is not re-run. Null for older analyses. */
+  detected_people: DetectedPerson[] | null;
 };
 
 /** Dominance ranking v2 schema */
@@ -37,7 +49,7 @@ export type ResultV2 = Record<string, unknown>;
 /** Insert payload for `analyses` (omit auto-generated fields) */
 export type AnalysisInsert = Omit<
   AnalysisRow,
-  "id" | "created_at" | "analysis_version" | "result_v2" | "dominance_result_v2" | "dominance_version"
+  "id" | "created_at" | "analysis_version" | "result_v2" | "dominance_result_v2" | "dominance_version" | "detected_people"
 > & {
   id?: string;
   created_at?: string;
@@ -45,4 +57,5 @@ export type AnalysisInsert = Omit<
   result_v2?: ResultV2 | null;
   dominance_result_v2?: DominanceResultV2 | null;
   dominance_version?: "v1" | "v2";
+  detected_people?: DetectedPerson[] | null;
 };

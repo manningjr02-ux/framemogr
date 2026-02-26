@@ -4,17 +4,25 @@ import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
+import PersonOverlaySelector from "@/components/PersonOverlaySelector";
 import SelectLoadingCinematic from "@/components/SelectLoadingCinematic";
+import { parseDetectResponse } from "@/lib/detectResponseSchema";
+import type { DetectedPerson } from "@/lib/types/database";
 
-type PersonThumb = { label: string; signedUrl: string | null };
+const isDev = process.env.NODE_ENV === "development";
 
 function SelectPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysisId") ?? "";
+  const debug = isDev && searchParams.get("debug") === "1";
 
-  const [people, setPeople] = useState<PersonThumb[]>([]);
+  const [detectResult, setDetectResult] = useState<{
+    imageUrl: string;
+    people: DetectedPerson[];
+  } | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detecting, setDetecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -22,21 +30,6 @@ function SelectPageContent() {
   const [competitorsFoundPhase, setCompetitorsFoundPhase] = useState(false);
   const [competitorsFoundDone, setCompetitorsFoundDone] = useState(false);
   const competitorsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didDetectRef = useRef<string | null>(null);
-
-  const fetchPeople = useCallback(async () => {
-    const res = await fetch(
-      `/api/analysis/people?analysisId=${encodeURIComponent(analysisId)}`
-    );
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok)
-      throw new Error(data?.error || `people failed (${res.status})`);
-    const list = Array.isArray(data.people) ? data.people : [];
-    return list.map((p: { label: string; signedUrl?: string | null }) => ({
-      label: p.label,
-      signedUrl: p.signedUrl ?? null,
-    })) as PersonThumb[];
-  }, [analysisId]);
 
   const runDetect = useCallback(async () => {
     const res = await fetch("/api/analysis/detect", {
@@ -45,38 +38,23 @@ function SelectPageContent() {
       body: JSON.stringify({ analysisId }),
     });
 
-    // 409 = detect already running; treat as non-fatal
     if (res.status === 409) return { status: "detecting" as const };
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 422) {
+        throw new Error("We couldn't detect faces. Try another photo.");
+      }
       throw new Error(
         data?.error || data?.detail || `detect failed (${res.status})`
       );
     }
-    return data;
-  }, [analysisId]);
-
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  const pollPeopleUntilThumbs = useCallback(async () => {
-    const timeoutMs = 20000;
-    const intervalMs = 600;
-    const start = Date.now();
-    let lastStableCount = 0;
-
-    while (Date.now() - start < timeoutMs) {
-      const list = await fetchPeople();
-      const allHaveThumbs =
-        list.length > 0 && list.every((p) => p.signedUrl);
-      if (allHaveThumbs) {
-        if (list.length === lastStableCount) return list;
-        lastStableCount = list.length;
-      }
-      await sleep(intervalMs);
+    const parsed = parseDetectResponse(data);
+    if (!parsed) {
+      throw new Error("We couldn't detect faces. Try another photo.");
     }
-    return await fetchPeople();
-  }, [fetchPeople]);
+    return parsed;
+  }, [analysisId]);
 
   useEffect(() => {
     if (!analysisId) return;
@@ -85,44 +63,37 @@ function SelectPageContent() {
     (async () => {
       setError(null);
       setLoading(true);
-
+      setDetecting(true);
       try {
-        const list = await fetchPeople();
-        const hasThumbs = list.length > 0 && list.some((p: PersonThumb) => p.signedUrl);
-
-        // Show grid as soon as we have people (thumbnails may load or show "No image").
-        if (list.length > 0 && !cancelled) setPeople(list);
-
-        if (!hasThumbs && list.length > 0) {
-          if (didDetectRef.current !== analysisId) {
-            didDetectRef.current = analysisId;
-            setDetecting(true);
-            await runDetect(); // may be 409, do not throw
-            setDetecting(false);
-          }
-          const ready = await pollPeopleUntilThumbs();
-          if (!cancelled) setPeople(ready);
-          return;
-        }
-
-        if (hasThumbs) {
-          const listAfter = await fetchPeople();
-          if (!cancelled) setPeople(listAfter);
+        const result = await runDetect();
+        if (cancelled) return;
+        if (result && "imageUrl" in result && "people" in result) {
+          setDetectResult({ imageUrl: result.imageUrl, people: result.people });
+        } else {
+          setDetectResult({ imageUrl: "", people: [] });
         }
       } catch (e: unknown) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setDetecting(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [analysisId, fetchPeople, runDetect, pollPeopleUntilThumbs]);
+  }, [analysisId, runDetect]);
 
-  // When loading completes, show "COMPETITORS FOUND" for 250-350ms then reveal
+  useEffect(() => {
+    if (isDev && debug && detectResult) {
+      console.log("[FrameMog debug] detection output", detectResult);
+    }
+  }, [debug, detectResult]);
+
   useEffect(() => {
     if (loading || detecting) {
       setCompetitorsFoundPhase(false);
@@ -147,31 +118,52 @@ function SelectPageContent() {
 
   const handleRetryDetect = useCallback(async () => {
     if (!analysisId) return;
-    didDetectRef.current = null;
     setError(null);
+    setDetectResult(null);
     setLoading(true);
     setDetecting(true);
     try {
-      await runDetect();
-      const ready = await pollPeopleUntilThumbs();
-      setPeople(ready);
+      const result = await runDetect();
+      if (result && "imageUrl" in result && "people" in result) {
+        setDetectResult({ imageUrl: result.imageUrl, people: result.people });
+      } else {
+        setDetectResult({ imageUrl: "", people: [] });
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
       setDetecting(false);
     }
-  }, [analysisId, runDetect, pollPeopleUntilThumbs]);
+  }, [analysisId, runDetect]);
+
+  const overlayPeople = detectResult?.people ?? [];
+  const selectedPersonValid =
+    !selectedPersonId ||
+    overlayPeople.some((p) => p.id === selectedPersonId);
+  const canSubmit =
+    !!selectedLabel &&
+    !!selectedPersonId &&
+    selectedPersonValid &&
+    !submitting;
 
   const handleAnalyze = async () => {
     if (!analysisId || !selectedLabel) return;
+    if (!selectedPersonId || !selectedPersonValid) {
+      setError("Please select yourself from the list.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/analysis/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ analysisId, selectedLabel }),
+        body: JSON.stringify({
+          analysisId,
+          selectedLabel,
+          selectedPersonId,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -224,7 +216,7 @@ function SelectPageContent() {
     );
   }
 
-  if (error && !people.length) {
+  if (error && detectResult == null) {
     return (
       <main className="flex min-h-[calc(100vh-65px)] flex-col items-center justify-center">
         <Container className="text-center">
@@ -257,38 +249,53 @@ function SelectPageContent() {
         <p className="mt-6 text-lg text-zinc-400 sm:text-xl">
           Select yourself to calculate YOUR frame gap.
         </p>
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {people.map((p) => {
-            const isSelected = selectedLabel === p.label;
-            return (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => setSelectedLabel(p.label)}
-                className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 text-left transition ${
-                  isSelected
-                    ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500"
-                    : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-600"
-                }`}
-              >
-                <div className="aspect-square w-full overflow-hidden rounded-lg bg-zinc-800">
-                  {p.signedUrl ? (
-                    <img
-                      src={p.signedUrl}
-                      alt={p.label}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-zinc-500">
-                      No image
-                    </div>
-                  )}
-                </div>
-                <span className="text-lg font-medium text-white">{p.label}</span>
-              </button>
-            );
-          })}
-        </div>
+
+        {detectResult && (
+          <>
+            <div className="mt-12 max-w-2xl">
+              <PersonOverlaySelector
+                imageUrl={detectResult.imageUrl}
+                people={detectResult.people}
+                debug={debug}
+                onSelect={(personId, label) => {
+                  setSelectedPersonId(personId);
+                  setSelectedLabel(label);
+                }}
+              />
+            </div>
+            {overlayPeople.length > 0 && (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {overlayPeople.map((p) => {
+                  const letter = p.label.replace(/^Person\s+/i, "").trim().slice(0, 1).toUpperCase() || "?";
+                  const isSelected = selectedLabel === p.label;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPersonId(p.id);
+                        setSelectedLabel(p.label);
+                      }}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                        isSelected
+                          ? "bg-cyan-500 text-black ring-2 ring-cyan-400"
+                          : "bg-zinc-700 text-white hover:bg-zinc-600"
+                      }`}
+                    >
+                      I&apos;m {letter}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {selectedLabel && !selectedPersonValid && (
+          <p className="mt-6 rounded-lg bg-red-500/10 px-4 py-3 text-red-400">
+            Selected person not found. Please choose again.
+          </p>
+        )}
         {error && (
           <p className="mt-6 rounded-lg bg-red-500/10 px-4 py-3 text-red-400">
             {error}
@@ -297,7 +304,7 @@ function SelectPageContent() {
         <button
           type="button"
           onClick={handleAnalyze}
-          disabled={!selectedLabel || submitting}
+          disabled={!canSubmit}
           className="mt-12 rounded-lg bg-cyan-500 px-10 py-4 font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Saving…" : "Analyze My Frame"}

@@ -13,8 +13,8 @@ const FRAME_MOG_VERSION = process.env.FRAME_MOG_VERSION ?? "v2";
 export async function POST(req: Request) {
   let analysisId: string | undefined;
   try {
-    const body = await req.json();
-    analysisId = body.analysisId;
+    const body = await req.json().catch(() => ({}));
+    analysisId = typeof body?.analysisId === "string" ? body.analysisId : undefined;
     if (!analysisId) {
       return NextResponse.json(
         { error: "analysisId required" },
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     const { data: analysis, error: fetchErr } = await supabaseAdmin
       .from("analyses")
-      .select("id, image_path, selected_label, status")
+      .select("id, image_path, selected_label, status, detected_people")
       .eq("id", analysisId)
       .single();
 
@@ -33,6 +33,10 @@ export async function POST(req: Request) {
         { error: "Analysis not found" },
         { status: 404 }
       );
+    }
+
+    if (analysis.status === "complete") {
+      return NextResponse.json({ ok: true, already_complete: true });
     }
 
     await supabaseAdmin
@@ -76,7 +80,7 @@ export async function POST(req: Request) {
       const v2Result = await runFrameMogV2({ imageUrl });
       const potential_delta =
         v2Result.potential_score - v2Result.overall_score;
-      await supabaseAdmin
+      const { error: updateErr } = await supabaseAdmin
         .from("analyses")
         .update({
           current_score: v2Result.overall_score,
@@ -88,6 +92,20 @@ export async function POST(req: Request) {
           error_message: null,
         })
         .eq("id", analysisId);
+      if (updateErr) {
+        console.error("[run] v2 update error:", updateErr);
+        await supabaseAdmin
+          .from("analyses")
+          .update({
+            status: "failed",
+            error_message: "Failed to save results",
+          })
+          .eq("id", analysisId);
+        return NextResponse.json(
+          { error: "Failed to save results", detail: updateErr.message },
+          { status: 500 }
+        );
+      }
       return NextResponse.json({
         ok: true,
         analysis_version: "v2",
@@ -98,6 +116,13 @@ export async function POST(req: Request) {
       console.log("[run] FrameMog v1 (kill switch)");
     }
     if (!analysis.selected_label) {
+      await supabaseAdmin
+        .from("analyses")
+        .update({
+          status: "failed",
+          error_message: "No selection. Pick yourself on the select page first.",
+        })
+        .eq("id", analysisId);
       return NextResponse.json(
         { error: "No selection. Pick yourself on the select page first." },
         { status: 400 }
@@ -109,7 +134,22 @@ export async function POST(req: Request) {
       .select("label")
       .eq("analysis_id", analysisId);
 
-    if (pplErr || !dbPeopleForPrompt?.length) {
+    const detectedPeople = (analysis?.detected_people ?? []) as Array<{
+      id: string;
+      label: string;
+      box: { x: number; y: number; w: number; h: number };
+    }>;
+    const labelsFromDetected = detectedPeople.map((p) => p.label);
+
+    let labels: string[];
+    if (dbPeopleForPrompt?.length) {
+      labels = dbPeopleForPrompt.map((p) => p.label);
+    } else if (labelsFromDetected.length) {
+      labels = labelsFromDetected;
+    } else {
+      if (pplErr) {
+        console.error("[run] analysis_people error:", pplErr);
+      }
       await supabaseAdmin
         .from("analyses")
         .update({ status: "failed", error_message: "No detected faces found" })
@@ -119,8 +159,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-    const labels = dbPeopleForPrompt.map((p) => p.label);
 
     let lastRaw = "";
     const runVision = async () => {
@@ -188,12 +226,33 @@ export async function POST(req: Request) {
       sortedPeople.map((p, i) => [p.label, i])
     );
 
-    const { data: dbPeople } = await supabaseAdmin
-      .from("analysis_people")
-      .select("id, label")
-      .eq("analysis_id", analysisId);
+    let dbPeople = (
+      await supabaseAdmin
+        .from("analysis_people")
+        .select("id, label")
+        .eq("analysis_id", analysisId)
+    ).data ?? [];
 
-    if (dbPeople) {
+    if (!dbPeople.length && detectedPeople.length) {
+      for (let i = 0; i < detectedPeople.length; i++) {
+        const d = detectedPeople[i];
+        await supabaseAdmin.from("analysis_people").insert({
+          analysis_id: analysisId,
+          label: d.label,
+          left_to_right_index: i,
+          sort_order: i,
+          crop_box: d.box ?? {},
+        });
+      }
+      dbPeople =
+        (await supabaseAdmin
+          .from("analysis_people")
+          .select("id, label")
+          .eq("analysis_id", analysisId))
+          .data ?? [];
+    }
+
+    if (dbPeople.length) {
       for (const p of dbPeople) {
         const api = peopleByLabel.get(p.label);
         if (!api) continue;
@@ -217,7 +276,7 @@ export async function POST(req: Request) {
 
     const potential_delta = result.potential_score - result.current_score;
 
-    await supabaseAdmin
+    const { error: updateErr } = await supabaseAdmin
       .from("analyses")
       .update({
         current_score: result.current_score,
@@ -233,6 +292,21 @@ export async function POST(req: Request) {
         error_message: null,
       })
       .eq("id", analysisId);
+
+    if (updateErr) {
+      console.error("[run] v1 update error:", updateErr);
+      await supabaseAdmin
+        .from("analyses")
+        .update({
+          status: "failed",
+          error_message: "Failed to save results",
+        })
+        .eq("id", analysisId);
+      return NextResponse.json(
+        { error: "Failed to save results", detail: updateErr.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,

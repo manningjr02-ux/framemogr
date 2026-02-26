@@ -31,3 +31,13 @@ export const supabaseAdmin = new Proxy({} as SupabaseClient, {
     return value;
   },
 });
+
+/** Returns a temporary URL for an object in group-uploads (1h expiry). */
+export async function getGroupUploadImageUrl(path: string): Promise<string> {
+  const p = (path || "").replace(/^\//, "");
+  const { data } = await supabaseAdmin.storage
+    .from("group-uploads")
+    .createSignedUrl(p, 60 * 60);
+  const payload = data as { signedUrl?: string } | null;
+  return payload?.signedUrl ?? "";
+}
