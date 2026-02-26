@@ -22,6 +22,12 @@ function getSupabaseAdmin(): SupabaseClient {
 /** Lazy: created on first use so build can complete without env vars. */
 export const supabaseAdmin = new Proxy({} as SupabaseClient, {
   get(_, prop) {
-    return (getSupabaseAdmin() as unknown as Record<string, unknown>)[prop as string];
+    const target = getSupabaseAdmin() as unknown as Record<string, unknown>;
+    const value = target[prop as string];
+    // Bind methods so supabaseAdmin.from("table") has correct `this` (fixes serverless/Vercel).
+    if (typeof value === "function") {
+      return value.bind(target);
+    }
+    return value;
   },
 });
