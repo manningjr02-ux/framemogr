@@ -193,7 +193,8 @@ export async function POST(req: Request) {
         const nh = Math.round(h * scale);
         pipe = pipe.resize(nw, nh, { fit: "inside" });
       }
-      imageBuffer = await pipe.jpeg({ quality: 90 }).toBuffer();
+      const processed = await pipe.jpeg({ quality: 90 }).toBuffer();
+      imageBuffer = Buffer.from(processed);
       mime = "image/jpeg";
     } catch (preprocessErr) {
       console.warn("[detect] preprocess fallback:", preprocessErr);
