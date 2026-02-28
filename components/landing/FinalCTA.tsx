@@ -3,10 +3,10 @@ import Container from "@/components/Container";
 
 export default function FinalCTA() {
   return (
-    <section className="py-20 sm:py-28">
+    <section className="py-20 sm:py-28 bg-zinc-900/20">
       <Container>
         <div className="text-center">
-          <h2 className="text-3xl font-bold sm:text-4xl md:text-5xl">
+          <h2 className="text-3xl font-bold text-white sm:text-4xl md:text-5xl">
             Ready to see who owns the frame?
           </h2>
           <Link

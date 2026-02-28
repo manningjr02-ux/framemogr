@@ -38,6 +38,8 @@ export type AnalysisRow = {
   dominance_version: "v1" | "v2";
   /** Stored detection result; when set, detection is not re-run. Null for older analyses. */
   detected_people: DetectedPerson[] | null;
+  /** Calibration wizard answers (step1..step4) tied to analysis. */
+  calibration_data: Record<string, unknown> | null;
 };
 
 /** Dominance ranking v2 schema */

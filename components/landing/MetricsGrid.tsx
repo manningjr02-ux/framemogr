@@ -45,21 +45,21 @@ const METRICS = [
 
 export default function MetricsGrid() {
   return (
-    <section className="py-20 sm:py-28">
+    <section className="relative py-20 sm:py-28">
       <Container>
-        <h2 className="text-center text-3xl font-bold sm:text-4xl">
+        <h2 className="text-center text-3xl font-bold text-white sm:text-4xl">
           How We Rank Dominance
         </h2>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {METRICS.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
-              className="card-hover rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg transition-colors hover:border-cyan-500/20"
+              className="card-hover flex flex-col rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg transition-colors hover:border-cyan-500/20"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-                <Icon className="h-6 w-6" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
+                <Icon className="h-6 w-6" aria-hidden />
               </div>
-              <h3 className="mt-4 text-lg font-bold">{title}</h3>
+              <h3 className="mt-4 text-lg font-bold text-white">{title}</h3>
               <p className="mt-1 text-sm text-zinc-400">{description}</p>
             </div>
           ))}

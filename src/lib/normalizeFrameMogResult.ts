@@ -30,8 +30,8 @@ function safeStr(s: unknown): string {
   return typeof s === "string" && s.trim().length > 0 ? s.trim() : "";
 }
 
-/** Spread overall score into 6 metrics with slight variance */
-function deriveScoreBreakdown(overall: number): ScoreBreakdown {
+/** Spread overall score into 6 metrics with slight variance. Used to align breakdown with dominance ranking. */
+export function deriveScoreBreakdown(overall: number): ScoreBreakdown {
   const base = Math.max(0, Math.min(100, Math.round(overall)));
   const delta = Math.min(8, Math.floor((100 - base) / 6));
   const offsets = [0, 1, -1, 2, -2, 0];

@@ -170,7 +170,7 @@ function SelectPageContent() {
         setError(data?.error ?? "Failed to save selection");
         return;
       }
-      router.push(`/analyzing?analysisId=${analysisId}`);
+      router.push(`/calibrate?analysisId=${encodeURIComponent(analysisId)}&label=${encodeURIComponent(selectedLabel)}`);
     } catch {
       setError("Failed to save selection");
     } finally {

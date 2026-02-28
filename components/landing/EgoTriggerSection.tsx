@@ -5,7 +5,7 @@ export default function EgoTriggerSection() {
     <section className="py-20 sm:py-28">
       <Container>
         <div className="rounded-3xl border border-white/10 bg-white/5 p-10 shadow-lg sm:p-14">
-          <h2 className="text-center text-2xl font-bold sm:text-3xl md:text-4xl">
+          <h2 className="text-center text-2xl font-bold text-white sm:text-3xl md:text-4xl">
             Think you&apos;re not getting mogged?
           </h2>
           <p className="mt-6 text-center text-lg text-zinc-400 sm:text-xl">

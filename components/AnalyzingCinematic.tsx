@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const PHASES = [
   "Scanning camera bias...",
@@ -40,9 +41,13 @@ const NODE_POSITIONS = [
 
 type Props = {
   showVerdictReady: boolean;
+  analysisId?: string | null;
 };
 
-export default function AnalyzingCinematic({ showVerdictReady }: Props) {
+export default function AnalyzingCinematic({
+  showVerdictReady,
+  analysisId,
+}: Props) {
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [tensionIndex, setTensionIndex] = useState(0);
   const [activeNodeIndex, setActiveNodeIndex] = useState(0);
@@ -104,10 +109,18 @@ export default function AnalyzingCinematic({ showVerdictReady }: Props) {
 
   if (showVerdictReady) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-6">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-6">
         <h2 className="analyzing-title-glow text-4xl font-bold tracking-[0.2em] text-cyan-400 sm:text-5xl md:text-6xl">
           VERDICT READY
         </h2>
+        {analysisId && (
+          <Link
+            href={`/results?analysisId=${encodeURIComponent(analysisId)}`}
+            className="rounded-lg bg-cyan-500 px-8 py-3 font-semibold text-black transition hover:bg-cyan-400"
+          >
+            View Results
+          </Link>
+        )}
       </div>
     );
   }

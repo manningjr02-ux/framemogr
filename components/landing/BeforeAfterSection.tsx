@@ -5,7 +5,7 @@ import Container from "@/components/Container";
 
 export default function BeforeAfterSection() {
   return (
-    <section className="py-20 sm:py-28">
+    <section className="py-20 sm:py-28 bg-zinc-900/20">
       <Container>
         <div className="flex flex-col items-center gap-8 lg:flex-row lg:justify-center lg:gap-12">
           {/* Before card */}

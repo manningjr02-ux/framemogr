@@ -18,7 +18,7 @@ export default function Nav() {
               height={32}
               className="h-8 w-8"
             />
-            framrmog
+            FrameMog
           </Link>
           <Link
             href="/upload"

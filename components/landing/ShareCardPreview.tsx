@@ -6,7 +6,7 @@ export default function ShareCardPreview() {
   return (
     <section className="py-20 sm:py-28">
       <Container>
-        <h2 className="text-center text-3xl font-bold sm:text-4xl">
+        <h2 className="text-center text-3xl font-bold text-white sm:text-4xl">
           Built for Screenshots.
         </h2>
         <div className="mt-12 flex flex-col items-center">
@@ -29,7 +29,7 @@ export default function ShareCardPreview() {
               <p>Potential: 92</p>
             </div>
             <p className="mt-8 text-center text-xs text-zinc-500">
-              framrmog.com
+              framemog.com
             </p>
           </div>
           <Link

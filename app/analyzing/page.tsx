@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
 import AnalyzingCinematic from "@/components/AnalyzingCinematic";
@@ -12,7 +12,6 @@ const POLL_INTERVAL_MS = 1500;
 const LOADING_TIMEOUT_MS = 90000;
 
 function AnalyzingPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysisId");
 
@@ -24,6 +23,7 @@ function AnalyzingPageContent() {
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const verdictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigatedRef = useRef(false);
 
   const pollStatus = useCallback(async () => {
     if (!analysisId) return;
@@ -58,11 +58,11 @@ function AnalyzingPageContent() {
   }, [analysisId, retryKey, pollStatus]);
 
   useEffect(() => {
-    if (!analysisId) return;
+    if (!analysisId || status === "complete" || status === "failed") return;
     pollStatus();
     const id = setInterval(pollStatus, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [analysisId, pollStatus]);
+  }, [analysisId, status, pollStatus]);
 
   useEffect(() => {
     if (!analysisId || status === "complete" || status === "failed") return;
@@ -80,13 +80,15 @@ function AnalyzingPageContent() {
   }, [analysisId, status, retryKey]);
 
   useEffect(() => {
-    if (status !== "complete" || !analysisId) return;
+    if (status !== "complete" || !analysisId || navigatedRef.current) return;
     const elapsed = Date.now() - startTime;
     const remaining = Math.max(0, MIN_SUSPENSE_MS - elapsed);
     const t = setTimeout(() => {
       setShowVerdictReady(true);
       verdictTimerRef.current = setTimeout(() => {
-        router.push(`/results?analysisId=${analysisId}`);
+        if (navigatedRef.current) return;
+        navigatedRef.current = true;
+        window.location.href = `/results?analysisId=${encodeURIComponent(analysisId)}`;
       }, VERDICT_HOLD_MS);
     }, remaining);
     return () => {
@@ -96,9 +98,10 @@ function AnalyzingPageContent() {
         verdictTimerRef.current = null;
       }
     };
-  }, [status, analysisId, router, startTime]);
+  }, [status, analysisId, startTime]);
 
   const handleRetry = () => {
+    navigatedRef.current = false;
     setStatus(null);
     setErrorMessage(null);
     setShowVerdictReady(false);
@@ -186,7 +189,10 @@ function AnalyzingPageContent() {
       />
       <div className="noise-overlay pointer-events-none absolute inset-0" />
       <Container className="relative z-10 flex flex-col items-center">
-        <AnalyzingCinematic showVerdictReady={showVerdictReady} />
+        <AnalyzingCinematic
+          showVerdictReady={showVerdictReady}
+          analysisId={analysisId}
+        />
       </Container>
     </main>
   );
@@ -199,7 +205,7 @@ export default function AnalyzingPage() {
         <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center justify-center overflow-hidden">
           <div className="noise-overlay pointer-events-none absolute inset-0" />
           <Container className="relative z-10 flex flex-col items-center">
-            <AnalyzingCinematic showVerdictReady={false} />
+            <AnalyzingCinematic showVerdictReady={false} analysisId={null} />
           </Container>
         </main>
       }

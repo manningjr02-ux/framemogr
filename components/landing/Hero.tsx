@@ -29,7 +29,7 @@ export default function Hero() {
           />
         </div>
         {/* Hero copy - EXACTLY as specified, do not change */}
-        <h1 className="text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
+        <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl">
           Who Controls The Frame?
         </h1>
         <p className="mt-8 text-xl text-zinc-400 sm:text-2xl md:text-3xl">
@@ -37,16 +37,16 @@ export default function Hero() {
         </p>
 
         {/* CTAs */}
-        <div className="mt-12 flex flex-col items-center gap-4 sm:flex-row sm:gap-4">
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:flex-row sm:gap-6">
           <Link
             href="/upload"
-            className="inline-block rounded-lg bg-cyan-500 px-10 py-4 text-lg font-semibold text-black transition hover:bg-cyan-400 sm:text-xl"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cyan-500 px-10 py-4 text-lg font-semibold text-black transition hover:bg-cyan-400 sm:text-xl"
           >
             Get Started
           </Link>
           <Link
             href="/upload"
-            className="inline-block rounded-lg border border-white/20 bg-white/5 px-8 py-4 text-lg font-medium text-white transition hover:bg-white/10 sm:text-xl"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/5 px-8 py-4 text-lg font-medium text-white transition hover:border-white/30 hover:bg-white/10 sm:text-xl"
           >
             See Example
           </Link>

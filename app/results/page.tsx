@@ -9,7 +9,10 @@ import ResultsTopMove from "@/components/ResultsTopMove";
 import ResultsInsights from "@/components/ResultsInsights";
 import FrameOverlayExport from "@/components/FrameOverlayExport";
 import { supabaseAdmin, getGroupUploadImageUrl } from "@/lib/supabase/server";
-import { normalizeFrameMogResult } from "@/src/lib/normalizeFrameMogResult";
+import {
+  normalizeFrameMogResult,
+  deriveScoreBreakdown,
+} from "@/src/lib/normalizeFrameMogResult";
 import { getMetricLabel } from "@/src/lib/frameMogLabels";
 import {
   clampAndSanitizeDominanceResult,
@@ -67,6 +70,41 @@ export default async function ResultsPage({ searchParams }: PageProps) {
   }
 
   const normalized = normalizeFrameMogResult(analysis);
+  const selectedLabel = analysis.selected_label ?? "";
+
+  const dominanceRaw = analysis.dominance_result_v2 as unknown;
+  const hasDominance =
+    dominanceRaw &&
+    typeof dominanceRaw === "object" &&
+    Array.isArray((dominanceRaw as DominanceResult).people) &&
+    ((dominanceRaw as DominanceResult).people?.length ?? 0) >= 2;
+
+  const dominance = hasDominance
+    ? clampAndSanitizeDominanceResult(dominanceRaw)
+    : null;
+
+  const selectedPersonInDominance = dominance
+    ? dominance.people.find(
+        (p) =>
+          p.label.trim().toLowerCase() === selectedLabel.trim().toLowerCase()
+      )
+    : null;
+
+  const displayNormalized =
+    selectedPersonInDominance != null
+      ? {
+          ...normalized,
+          overall_score: selectedPersonInDominance.dominance_score,
+          potential_score: Math.min(
+            100,
+            selectedPersonInDominance.dominance_score +
+              Math.max(0, normalized.potential_score - normalized.overall_score)
+          ),
+          score_breakdown: deriveScoreBreakdown(
+            selectedPersonInDominance.dominance_score
+          ),
+        }
+      : normalized;
 
   const { data: people } = await supabaseAdmin
     .from("analysis_people")
@@ -74,7 +112,6 @@ export default async function ResultsPage({ searchParams }: PageProps) {
     .eq("analysis_id", analysisId)
     .order("sort_order", { ascending: true });
 
-  const selectedLabel = analysis.selected_label ?? "";
   const detectedPeople = (analysis.detected_people ?? []) as Array<{
     id?: string;
     label: string;
@@ -90,17 +127,6 @@ export default async function ResultsPage({ searchParams }: PageProps) {
           sort_order: i,
         }));
   const N = peopleList.length;
-
-  const dominanceRaw = analysis.dominance_result_v2 as unknown;
-  const hasDominance =
-    dominanceRaw &&
-    typeof dominanceRaw === "object" &&
-    Array.isArray((dominanceRaw as DominanceResult).people) &&
-    ((dominanceRaw as DominanceResult).people?.length ?? 0) >= 2;
-
-  const dominance = hasDominance
-    ? clampAndSanitizeDominanceResult(dominanceRaw)
-    : null;
 
   let leaderboardItems: Array<{
     rank: number;
@@ -156,8 +182,8 @@ export default async function ResultsPage({ searchParams }: PageProps) {
   const imageHeight = analysis.image_height ?? 1920;
 
   const lowestMetric = getWeakestMetricLabel(
-    normalized.score_breakdown,
-    normalized.photo_type
+    displayNormalized.score_breakdown,
+    displayNormalized.photo_type
   );
 
   const peopleWithScores = dominance
@@ -204,26 +230,28 @@ export default async function ResultsPage({ searchParams }: PageProps) {
 
         <div className="flex flex-col gap-4">
           <ScoreDelta
-            currentScore={normalized.overall_score}
-            potentialScore={normalized.potential_score}
-            potentialDelta={normalized.potential_score - normalized.overall_score}
+            currentScore={displayNormalized.overall_score}
+            potentialScore={displayNormalized.potential_score}
+            potentialDelta={
+              displayNormalized.potential_score - displayNormalized.overall_score
+            }
             yourRank={yourRank ?? 1}
             totalPeople={totalPeople}
           />
           <MogCardTrigger
-            currentScore={normalized.overall_score}
-            potentialScore={normalized.potential_score}
+            currentScore={displayNormalized.overall_score}
+            potentialScore={displayNormalized.potential_score}
             currentRank={yourRank ?? 1}
             totalPeople={totalPeople}
             lowestMetric={lowestMetric}
           />
         </div>
 
-        <ResultsBreakdownGrid data={normalized} />
+        <ResultsBreakdownGrid data={displayNormalized} />
 
-        <ResultsTopMove data={normalized} />
+        <ResultsTopMove data={displayNormalized} />
 
-        <ResultsInsights data={normalized} />
+        <ResultsInsights data={displayNormalized} />
 
         {imageUrl && overlayPeople.length > 0 && (
           <FrameOverlayExport
