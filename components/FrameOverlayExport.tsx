@@ -36,7 +36,31 @@ export default function FrameOverlayExport({
   const handleDownload = async () => {
     if (!containerRef.current) return;
     setDownloading(true);
+    let originalSrc: string | null = null;
     try {
+      // On mobile, html-to-image often fails to render external images (CORS/tainted canvas).
+      // Proxy the image through a data URL so it's same-origin when captured.
+      const img = containerRef.current.querySelector<HTMLImageElement>("img");
+      if (img && imageUrl && (imageUrl.startsWith("http:") || imageUrl.startsWith("https:"))) {
+        try {
+          const res = await fetch(imageUrl, { mode: "cors", credentials: "omit" });
+          if (res.ok) {
+            const blob = await res.blob();
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            originalSrc = img.src;
+            img.src = dataUrl;
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          }
+        } catch {
+          // Fall through to capture with original src if proxy fails
+        }
+      }
+
       const dataUrl = await toPng(containerRef.current, {
         pixelRatio: PIXEL_RATIO,
         cacheBust: true,
@@ -51,6 +75,10 @@ export default function FrameOverlayExport({
     } catch (err) {
       console.error("Export failed:", err);
     } finally {
+      if (originalSrc != null) {
+        const img = containerRef.current?.querySelector<HTMLImageElement>("img");
+        if (img) img.src = originalSrc;
+      }
       setDownloading(false);
     }
   };
