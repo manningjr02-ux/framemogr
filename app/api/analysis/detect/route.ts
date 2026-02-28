@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 import { supabaseAdmin, getGroupUploadImageUrl } from "@/lib/supabase/server";
 import { openai } from "@/lib/openai/client";
 import { DETECT_SYSTEM, DETECT_USER } from "@/lib/analysis/detectPrompt";
@@ -165,13 +166,41 @@ export async function POST(req: Request) {
       return err("Failed to download image", msg);
     }
 
-    const imageBuffer = Buffer.from(await downloadData.arrayBuffer());
-    const base64 = imageBuffer.toString("base64");
-    const mime = imagePath.endsWith(".png")
+    let imageBuffer = Buffer.from(await downloadData.arrayBuffer());
+    let mime: string = imagePath.endsWith(".png")
       ? "image/png"
       : imagePath.endsWith(".webp")
         ? "image/webp"
         : "image/jpeg";
+
+    // Preprocess for better detection on mobile/compressed photos: fix EXIF orientation
+    // (critical for mobile camera photos), ensure minimum resolution for face clarity,
+    // cap size for API limits.
+    const MIN_SIDE = 768;
+    const MAX_SIDE = 2048;
+    try {
+      let pipe = sharp(imageBuffer).rotate(); // auto-orient from EXIF
+      const meta = await pipe.metadata();
+      const w = meta.width ?? 1;
+      const h = meta.height ?? 1;
+      const shortSide = Math.min(w, h);
+      const longSide = Math.max(w, h);
+      let scale = 1;
+      if (shortSide < MIN_SIDE) scale = MIN_SIDE / shortSide;
+      if (longSide * scale > MAX_SIDE) scale = MAX_SIDE / longSide;
+      if (scale !== 1) {
+        const nw = Math.round(w * scale);
+        const nh = Math.round(h * scale);
+        pipe = pipe.resize(nw, nh, { fit: "inside" });
+      }
+      imageBuffer = await pipe.jpeg({ quality: 90 }).toBuffer();
+      mime = "image/jpeg";
+    } catch (preprocessErr) {
+      console.warn("[detect] preprocess fallback:", preprocessErr);
+      // keep original buffer on error
+    }
+
+    const base64 = imageBuffer.toString("base64");
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",

@@ -19,6 +19,10 @@ DETERMINISTIC CROWD RULE:
 - If the scene contains a crowd, detect ONLY the most prominent 2–12 main subjects who are clearly part of the group being photographed.
 - Prefer people closest to camera, centered, and clearly posed.
 
+VARIED IMAGE QUALITY (mobile, compressed, or lower-resolution photos):
+- Be thorough: detect ALL visible faces in the main group, including slightly smaller faces or varied angles.
+- Apply the same rules; do not over-exclude due to lower resolution or compression.
+
 CRITICAL - ONE PERSON PER BOX:
 - Each box = exactly one person (head + upper shoulders). Never two people in one box.
 - x, y = top-left, w, h = width and height (normalized 0-1).
