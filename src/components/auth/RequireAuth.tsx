@@ -8,6 +8,12 @@ type RequireAuthProps = {
   children: React.ReactNode;
 };
 
+const LOOP_GUARD_PREFIXES = ["/login", "/signup", "/paywall"] as const;
+
+function isLoopGuardPath(pathname: string): boolean {
+  return LOOP_GUARD_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 export default function RequireAuth({ children }: RequireAuthProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -21,9 +27,14 @@ export default function RequireAuth({ children }: RequireAuthProps) {
       if (cancelled) return;
       if (data.session) {
         setStatus("authenticated");
+      } else if (typeof window !== "undefined" && isLoopGuardPath(pathname ?? "")) {
+        setStatus("authenticated");
       } else {
-        const next = pathname ? encodeURIComponent(pathname) : "";
-        router.replace(`/login${next ? `?next=${next}` : ""}`);
+        const next =
+          typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : pathname ?? "";
+        router.replace(`/login?next=${encodeURIComponent(next)}`);
         setStatus("unauthenticated");
       }
     }

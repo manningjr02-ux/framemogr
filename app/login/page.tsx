@@ -14,10 +14,23 @@ import Link from "next/link";
 import Container from "@/components/Container";
 import { supabase } from "@/lib/supabase/public";
 
+const ALLOWED_NEXT_PREFIXES = ["/calibrate", "/analyzing", "/results", "/select", "/paywall"];
+
+function validateNext(raw: string | null): string | null {
+  if (!raw || typeof raw !== "string" || raw.length === 0) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  const lower = raw.toLowerCase();
+  if (lower.includes("http://") || lower.includes("https://")) return null;
+  if (!ALLOWED_NEXT_PREFIXES.some((p) => raw.startsWith(p))) return null;
+  return raw;
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/calibrate";
+  const rawNext = searchParams.get("next");
+  const safeNext = validateNext(rawNext);
+  const redirectTo = safeNext ?? "/calibrate";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +54,7 @@ function LoginPageContent() {
         return;
       }
 
-      router.push(next);
+      router.replace(redirectTo);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -50,7 +63,7 @@ function LoginPageContent() {
   }
 
   const signupHref =
-    next !== "/calibrate" ? `/signup?next=${encodeURIComponent(next)}` : "/signup";
+    rawNext && safeNext ? `/signup?next=${encodeURIComponent(rawNext)}` : "/signup";
 
   return (
     <main className="flex min-h-[calc(100vh-65px)] flex-col items-center justify-center py-16">
@@ -115,6 +128,17 @@ function LoginPageContent() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        {safeNext && (
+          <p className="mt-4 text-center">
+            <Link
+              href={safeNext}
+              className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
+            >
+              Continue where you left off →
+            </Link>
+          </p>
+        )}
 
         <p className="mt-6 text-center text-sm text-zinc-400">
           Don&apos;t have an account?{" "}

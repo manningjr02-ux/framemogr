@@ -109,10 +109,20 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="flex min-h-[calc(100vh-65px)] flex-col items-center py-16">
-      <Container className="w-full max-w-xl">
-        <h1 className="text-4xl font-bold sm:text-5xl md:text-6xl">Upload</h1>
-        <p className="mt-6 text-lg text-zinc-400 sm:text-xl">
+    <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center bg-zinc-950 py-16">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 50% at 50% 20%, rgba(34, 211, 238, 0.05) 0%, transparent 60%)",
+        }}
+      />
+      <div className="noise-overlay pointer-events-none absolute inset-0" />
+      <Container className="relative z-10 w-full max-w-xl">
+        <h1 className="text-center text-3xl font-bold text-white sm:text-4xl md:text-5xl">
+          Upload
+        </h1>
+        <p className="mt-4 text-center text-lg text-zinc-400 sm:text-xl">
           Drop your group photo here
         </p>
 
@@ -143,14 +153,14 @@ export default function UploadPage() {
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 transition-colors hover:border-zinc-700">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
-              className="mt-1.5 h-5 w-5 rounded border-zinc-600 bg-zinc-900 text-cyan-500 focus:ring-cyan-500"
+              className="mt-1 h-5 w-5 shrink-0 rounded border-zinc-600 bg-zinc-800 text-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-0 focus:ring-offset-zinc-950"
             />
-            <span className="text-zinc-300">
+            <span className="text-sm text-zinc-300">
               I have permission to upload this photo.
             </span>
           </label>
@@ -160,15 +170,15 @@ export default function UploadPage() {
           </p>
 
           {error && (
-            <p className="rounded-lg bg-red-500/10 px-4 py-3 text-red-400">
-              {error}
-            </p>
+            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
+              <p className="text-sm font-medium text-red-400">{error}</p>
+            </div>
           )}
 
           <button
             type="submit"
             disabled={loading || !file || !consent}
-            className="w-full rounded-lg bg-cyan-500 py-4 text-lg font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-cyan-500 px-4 py-4 text-lg font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-cyan-500"
           >
             {loading ? "Uploading…" : "Continue"}
           </button>

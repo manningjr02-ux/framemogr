@@ -12,7 +12,7 @@
  * 8) No console errors/hydration warnings
  */
 
-import { Suspense, useState, useCallback } from "react";
+import { Suspense, useState, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RequireAuth from "@/src/components/auth/RequireAuth";
@@ -24,10 +24,20 @@ import { getMyEntitlement, hasPaidAccess } from "@/src/lib/entitlements";
 function CalibratePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const analysisId = searchParams.get("analysisId") ?? "";
+  const analysisIdFromUrl = searchParams.get("analysisId");
+  const analysisId = analysisIdFromUrl ?? "";
   const label = searchParams.get("label") ?? "";
 
   const [submitting, setSubmitting] = useState(false);
+  const [resuming, setResuming] = useState(false);
+
+  useEffect(() => {
+    if (analysisIdFromUrl && !label) {
+      setResuming(true);
+      router.replace(`/analyzing?analysisId=${encodeURIComponent(analysisIdFromUrl)}`);
+    }
+  }, [analysisIdFromUrl, label, router]);
+
   const [error, setError] = useState<string | null>(null);
 
   const draftKey = analysisId && label ? `${analysisId}:${label}` : "";
@@ -80,6 +90,18 @@ function CalibratePageContent() {
     },
     [wizard.setAnswer, submitting]
   );
+
+  if (resuming) {
+    return (
+      <main className="flex min-h-[calc(100vh-65px)] flex-col items-center justify-center gap-4">
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-cyan-500"
+          aria-hidden
+        />
+        <p className="text-sm text-zinc-400">Resuming…</p>
+      </main>
+    );
+  }
 
   if (!analysisId || !label) {
     return (
