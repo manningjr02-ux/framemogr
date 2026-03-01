@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { X, Flame } from "lucide-react";
 import html2canvas from "html2canvas";
+import { getMyEntitlement, hasPaidAccess } from "@/src/lib/entitlements";
 
 type MogCardModalProps = {
   isOpen: boolean;
@@ -23,8 +25,15 @@ export default function MogCardModal({
   totalPeople,
   lowestMetric,
 }: MogCardModalProps) {
+  const router = useRouter();
   const cardRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getMyEntitlement().then((ent) => setHasAccess(hasPaidAccess(ent)));
+  }, [isOpen]);
 
   async function handleDownload() {
     if (!cardRef.current) return;
@@ -110,14 +119,37 @@ export default function MogCardModal({
           <p className="mt-8 text-center text-xs text-zinc-500">framrmog.com</p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={downloading}
-          className="mt-6 w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-black transition hover:bg-cyan-400 disabled:opacity-60"
-        >
-          {downloading ? "Generating…" : "Download PNG"}
-        </button>
+        {hasAccess === false ? (
+          <div className="mt-6 space-y-3">
+            <p className="text-center text-sm text-zinc-400">
+              Unlock to download Mog Card
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/paywall?returnTo=${encodeURIComponent(
+                    typeof window !== "undefined"
+                      ? window.location.pathname + window.location.search
+                      : "/results"
+                  )}`
+                )
+              }
+              className="w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-black transition hover:bg-cyan-400"
+            >
+              Unlock Mog Card
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading || hasAccess !== true}
+            className="mt-6 w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-black transition hover:bg-cyan-400 disabled:opacity-60"
+          >
+            {downloading ? "Generating…" : "Download PNG"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -131,12 +163,29 @@ export function MogCardTrigger({
   trigger,
   ...modalProps
 }: MogCardTriggerProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+
+  async function handleTriggerClick() {
+    const ent = await getMyEntitlement();
+    if (!hasPaidAccess(ent)) {
+      router.push(
+        `/paywall?returnTo=${encodeURIComponent(
+          typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : "/results"
+        )}`
+      );
+      return;
+    }
+    setIsOpen(true);
+  }
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={handleTriggerClick}
         className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20"
       >
         {trigger ?? "Generate Mog Card"}

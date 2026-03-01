@@ -15,9 +15,11 @@
 import { Suspense, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import RequireAuth from "@/src/components/auth/RequireAuth";
 import CalibrationShell from "@/src/components/calibrate/CalibrationShell";
 import { useCalibrationWizard } from "@/src/hooks/useCalibrationWizard";
 import { submitCalibrationAndStart } from "@/src/lib/calibrate/submit";
+import { getMyEntitlement, hasPaidAccess } from "@/src/lib/entitlements";
 
 function CalibratePageContent() {
   const router = useRouter();
@@ -42,7 +44,14 @@ function CalibratePageContent() {
         selectedLabel: label,
         answers: wizard.answers,
       });
-      router.push(`/analyzing?analysisId=${encodeURIComponent(analysisId)}`);
+      const ent = await getMyEntitlement();
+      if (!hasPaidAccess(ent)) {
+        router.push(
+          `/paywall?returnTo=${encodeURIComponent(`/analyzing?analysisId=${analysisId}`)}`
+        );
+      } else {
+        router.push(`/analyzing?analysisId=${analysisId}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
       setSubmitting(false);
@@ -114,25 +123,27 @@ function CalibratePageContent() {
 
 export default function CalibratePage() {
   return (
-    <Suspense
-      fallback={
-        <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center justify-center overflow-hidden">
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 80% 50% at 50% 20%, rgba(34, 211, 238, 0.05) 0%, transparent 60%)",
-            }}
-          />
-          <div className="noise-overlay pointer-events-none absolute inset-0" />
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="h-8 w-48 animate-pulse rounded bg-zinc-800" />
-            <div className="mt-6 h-4 w-64 animate-pulse rounded bg-zinc-800" />
-          </div>
-        </main>
-      }
-    >
-      <CalibratePageContent />
-    </Suspense>
+    <RequireAuth>
+      <Suspense
+        fallback={
+          <main className="relative flex min-h-[calc(100vh-65px)] flex-col items-center justify-center overflow-hidden">
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse 80% 50% at 50% 20%, rgba(34, 211, 238, 0.05) 0%, transparent 60%)",
+              }}
+            />
+            <div className="noise-overlay pointer-events-none absolute inset-0" />
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="h-8 w-48 animate-pulse rounded bg-zinc-800" />
+              <div className="mt-6 h-4 w-64 animate-pulse rounded bg-zinc-800" />
+            </div>
+          </main>
+        }
+      >
+        <CalibratePageContent />
+      </Suspense>
+    </RequireAuth>
   );
 }
